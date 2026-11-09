@@ -1,36 +1,31 @@
 package main
 
 import (
-	"context"
-	"log"
+	"fmt"
+	"os"
 
-	"github.com/Dopesonic/order-service/internal/app/config"
-	"github.com/Dopesonic/order-service/internal/app/handler/http/health"
-	rprocessor "github.com/Dopesonic/order-service/internal/app/processor/http"
-	rcpostgres "github.com/Dopesonic/order-service/internal/app/repository/conn/postgres"
+	"github.com/urfave/cli/v2"
+
+	"github.com/Dopesonic/order-service/cmd"
 )
 
 func main() {
-	config.Load()
-
-	cfg := config.Root
-
-	pgClient, err := rcpostgres.NewClient(context.Background(), cfg.Repository.Postgres)
-	if err != nil {
-		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+	app := cli.App{
+		Name:    "order-service",
+		Version: "1.0.0",
+		Usage:   "Order management service",
+		Commands: []*cli.Command{
+			cmd.WebServer(),
+		},
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "no-json",
+				Usage: "Human-readable log format",
+			},
+		},
 	}
-	defer pgClient.Close()
 
-	log.Printf("PostgreSQL connection established")
-
-	healthHandler := health.NewHandler()
-
-	httpProcessor := rprocessor.NewHTTP(
-		healthHandler,
-		cfg.Processor.WebServer,
-	)
-
-	if err := httpProcessor.Serve(); err != nil {
-		log.Fatalf("HTTP server failed: %v", err)
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 	}
 }

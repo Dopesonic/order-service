@@ -1,10 +1,13 @@
 package config
 
 import (
-	"log"
+	"io"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/Dopesonic/order-service/internal/app/config/section"
 )
@@ -17,12 +20,46 @@ type Config struct {
 
 var Root Config
 
-func Load() {
+type LoadArgs struct {
+	Output          io.Writer `json:"-"`
+	EnableSimpleLog bool
+}
+
+func Load(args LoadArgs) {
+	zerolog.TimestampFieldName = "timestamp"
+	zerolog.MessageFieldName = "msg"
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+
+	if args.EnableSimpleLog {
+		args.Output = zerolog.ConsoleWriter{Out: args.Output}
+	}
+
+	log.Logger = CreateLogger(zerolog.DebugLevel, args.Output)
+	log.Debug().Msg("Logger initialized with debug level")
+
 	if err := godotenv.Load(); err != nil {
-		log.Println("Error loading .env file")
+		log.Warn().Err(err).Msg("Error loading .env file")
 	}
 
 	if err := envconfig.Process("APP", &Root); err != nil {
-		log.Fatalf("Error loading config: %s", err)
+		log.Fatal().Err(err).Msg("Error loading config")
 	}
+
+	level, err := zerolog.ParseLevel(Root.Monitor.LogLevel)
+	if err != nil {
+		log.Warn().Str("log_level", Root.Monitor.LogLevel).Msg("Unknown log level, using debug")
+		level = zerolog.DebugLevel
+	}
+
+	log.Logger = CreateLogger(level, args.Output)
+	log.Info().Str("log_level", level.String()).
+		Msg("Logger re-initialized with config level")
+}
+
+func CreateLogger(level zerolog.Level, output io.Writer) zerolog.Logger {
+	return zerolog.New(output).
+		Level(level).
+		With().
+		Timestamp().
+		Logger()
 }

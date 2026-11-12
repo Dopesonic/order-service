@@ -55,7 +55,8 @@ func (r *repoPg) Update(ctx context.Context, order entity.Order) error {
 		Model(&entity.Order{}).
 		Where("guid = ?", order.GUID).
 		Updates(map[string]any{
-			"status": order.Status,
+			"status":     order.Status,
+			"updated_at": order.UpdatedAt,
 		})
 
 	if result.Error != nil {
@@ -94,7 +95,7 @@ func (r *repoPg) List(ctx context.Context, status *string, userGUID *uuid.UUID) 
 	}
 
 	if userGUID != nil {
-		query = query.Where("user_id = ?", *userGUID)
+		query = query.Where("user_guid = ?", *userGUID)
 	}
 
 	orders := make([]entity.Order, 0)

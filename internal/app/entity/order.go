@@ -57,7 +57,7 @@ type RequestOrderUpdate struct {
 
 type RequestOrderList struct {
 	Status   *string    `json:"status" binding:"omitempty"`
-	UserGUID *uuid.UUID `json:"user_guid" binding:"omitempty,gt=0"`
+	UserGUID *uuid.UUID `json:"user_guid" binding:"omitempty"`
 }
 
 type ResponseOrderCreate struct {

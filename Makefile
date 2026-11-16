@@ -43,6 +43,10 @@ migrate-down: ## Откатить все миграции
 .PHONY: migrate-create
 migrate-create: ## Создать новую пару миграций (NAME=имя)
 	@migrate create -ext sql -dir $(MIGRATION_DIR) -seq $(NAME)
+
+.PHONY: generate-proto
+generate-proto: ## Сгенерировать Go-код из .proto (buf)
+	buf generate
 # =============================================================================
 # Качество кода
 # =============================================================================

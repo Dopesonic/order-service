@@ -8,10 +8,14 @@ import (
 	"reflect"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
+	"google.golang.org/grpc"
 
+	ccatalog "github.com/Dopesonic/order-service/internal/app/client/catalog"
+	cgrpc "github.com/Dopesonic/order-service/internal/app/client/catalog/grpc"
 	"github.com/Dopesonic/order-service/internal/app/config"
 	rhandler "github.com/Dopesonic/order-service/internal/app/handler/http"
 	rhealth "github.com/Dopesonic/order-service/internal/app/handler/http/health"
@@ -40,8 +44,10 @@ type Builder struct {
 
 	orderService service.Order
 
-	healthHandler rhandler.Health
-	orderHandler  rhandler.Order
+	healthHandler   rhandler.Health
+	orderHandler    rhandler.Order
+	catalogV1Client ccatalog.Client
+	catalogGrpcConn *grpc.ClientConn
 
 	processors []processor.Processor
 }
@@ -118,8 +124,8 @@ func (b *Builder) BuildRepoOrder() {
 
 func (b *Builder) BuildServiceOrder() {
 	b.exec(func(b *Builder) {
-		b.orderService = sorder.NewService(b.orderRepo)
-	}, b.orderRepo)
+		b.orderService = sorder.NewService(b.orderRepo, b.catalogV1Client)
+	}, b.orderRepo, b.catalogV1Client)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -145,6 +151,43 @@ func (b *Builder) BuildProcHttp() {
 		)
 		b.processors = append(b.processors, p)
 	}, b.healthHandler, b.orderHandler)
+}
+
+func (b *Builder) BuildClientGrpcCatalogV1() {
+	b.exec(func(b *Builder) {
+		client, conn, err := cgrpc.NewClient(b.cfg.Client.Catalog.GrpcAddress)
+		if err != nil {
+			b.err = fmt.Errorf("failed create catalog gRPC client: %w", err)
+			return
+		}
+
+		pingCtx, cancel := context.WithTimeout(b.ctx, 2*time.Second)
+		defer cancel()
+
+		if err := client.Ping(pingCtx); err != nil {
+			if closeErr := conn.Close(); closeErr != nil {
+				log.Error().
+					Err(closeErr).
+					Msg("Failed to close catalog gRPC connection")
+			}
+
+			b.err = fmt.Errorf("failed ping catalog service: %w", err)
+			return
+		}
+
+		b.catalogV1Client = client
+		b.catalogGrpcConn = conn
+
+		processor.WatchForShutdown(
+			b.ctx,
+			&b.wg,
+			b.catalogGrpcConn,
+		)
+
+		log.Info().
+			Str("address", b.cfg.Client.Catalog.GrpcAddress).
+			Msg("Catalog gRPC client initialized")
+	})
 }
 
 ////////////////////////////////////////////////////////////////////////////

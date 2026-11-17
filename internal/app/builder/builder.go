@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
@@ -20,6 +21,7 @@ import (
 	rhandler "github.com/Dopesonic/order-service/internal/app/handler/http"
 	rhealth "github.com/Dopesonic/order-service/internal/app/handler/http/health"
 	horder "github.com/Dopesonic/order-service/internal/app/handler/http/order"
+	"github.com/Dopesonic/order-service/internal/app/monitor/metric"
 	"github.com/Dopesonic/order-service/internal/app/processor"
 	rprocessor "github.com/Dopesonic/order-service/internal/app/processor/http"
 	"github.com/Dopesonic/order-service/internal/app/repository"
@@ -124,7 +126,14 @@ func (b *Builder) BuildRepoOrder() {
 
 func (b *Builder) BuildServiceOrder() {
 	b.exec(func(b *Builder) {
-		b.orderService = sorder.NewService(b.orderRepo, b.catalogV1Client)
+		orderMetrics, err := mmetric.NewPrometheusOrder(
+			prometheus.DefaultRegisterer,
+		)
+		if err != nil {
+			b.err = fmt.Errorf("init order metrics: %w", err)
+			return
+		}
+		b.orderService = sorder.NewService(b.orderRepo, b.catalogV1Client, orderMetrics)
 	}, b.orderRepo, b.catalogV1Client)
 }
 

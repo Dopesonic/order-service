@@ -37,26 +37,31 @@ func (m *middleware) Callback(c *gin.Context) {
 		return
 	}
 
-	var message strings.Builder
-	message.Grow(48 + len(r.RequestURI))
-	message.WriteString(r.Method)
-	message.WriteByte(' ')
-	message.WriteString(r.RequestURI)
+	var mb strings.Builder
+	mb.Grow(48 + len(r.RequestURI))
+	mb.WriteString(r.Method)
+	mb.WriteByte(' ')
+	mb.WriteString(r.RequestURI)
 
-	var event *zerolog.Event
+	var ev *zerolog.Event
 	if err == nil {
-		message.WriteString(tailSuccess)
-		event = m.log.Debug()
+		mb.WriteString(tailSuccess)
+		ev = m.log.Debug()
 	} else {
-		message.WriteString(tailFail)
-		event = m.log.Error()
+		mb.WriteString(tailFail)
+		ev = m.log.Error()
 	}
 
-	event.Err(err).
+	ev.Err(err).
 		Ctx(r.Context()).
 		Str("exec_time", execTime.String()).
-		Str("client_ip", c.ClientIP()).
-		Msg(message.String())
+		Str("client_ip", c.ClientIP())
+
+	if status := httph.ErrorGetStatusCode(r); status > 0 {
+		ev.Int("http_status_code", status)
+	}
+
+	ev.Msg(mb.String())
 }
 
 func NewMiddleware(opts ...Option) gin.HandlerFunc {

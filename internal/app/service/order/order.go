@@ -8,6 +8,7 @@ import (
 
 	ccatalog "github.com/Dopesonic/order-service/internal/app/client/catalog"
 	"github.com/Dopesonic/order-service/internal/app/entity"
+	"github.com/Dopesonic/order-service/internal/app/monitor"
 	"github.com/Dopesonic/order-service/internal/app/repository"
 	"github.com/Dopesonic/order-service/internal/app/service"
 	catalogv1 "github.com/Dopesonic/order-service/internal/pkg/grpc/gen/catalog/v1"
@@ -16,16 +17,41 @@ import (
 type srv struct {
 	repoOrder   repository.Order
 	catalogGrpc ccatalog.Client
+	metrics     monitor.OrderMetrics
 }
 
-func NewService(repoOrder repository.Order, catalogGrpc ccatalog.Client) service.Order {
+//nolint:unused // Reserved for service unit tests.
+type noopOrderMetrics struct{}
+
+//nolint:unused // Reserved for service unit tests.
+type noopOrderCreateMetric struct{}
+
+//nolint:unused // Reserved for service unit tests.
+func (noopOrderMetrics) Create() monitor.OrderCreateMetric {
+	return noopOrderCreateMetric{}
+}
+
+//nolint:unused // Reserved for service unit tests.
+func (noopOrderCreateMetric) Success(int64) {}
+
+//nolint:unused // Reserved for service unit tests.
+func (noopOrderCreateMetric) Failed(error) {}
+
+func NewService(
+	repoOrder repository.Order,
+	catalogGrpc ccatalog.Client,
+	metrics monitor.OrderMetrics,
+) service.Order {
 	return &srv{
 		repoOrder:   repoOrder,
 		catalogGrpc: catalogGrpc,
+		metrics:     metrics,
 	}
 }
 
 func (s *srv) Create(ctx context.Context, req entity.RequestOrderCreate) (entity.Order, error) {
+	createMetric := s.metrics.Create()
+
 	productGUIDs := make([]string, 0, len(req.Items))
 
 	for _, item := range req.Items {
@@ -39,10 +65,12 @@ func (s *srv) Create(ctx context.Context, req entity.RequestOrderCreate) (entity
 		},
 	)
 	if err != nil {
+		createMetric.Failed(err)
 		return entity.Order{}, err
 	}
 
 	if len(productsResp.GetMissingGuids()) > 0 {
+		createMetric.Failed(entity.ErrIncorrectParameters)
 		return entity.Order{}, entity.ErrIncorrectParameters
 	}
 
@@ -61,6 +89,7 @@ func (s *srv) Create(ctx context.Context, req entity.RequestOrderCreate) (entity
 	for _, item := range req.Items {
 		unitPrice, found := priceByGUID[item.ProductGUID.String()]
 		if !found {
+			createMetric.Failed(entity.ErrIncorrectParameters)
 			return entity.Order{}, entity.ErrIncorrectParameters
 		}
 
@@ -89,9 +118,11 @@ func (s *srv) Create(ctx context.Context, req entity.RequestOrderCreate) (entity
 	}
 
 	if err := s.repoOrder.Create(ctx, order); err != nil {
+		createMetric.Failed(err)
 		return entity.Order{}, err
 	}
 
+	createMetric.Success(order.TotalPrice)
 	return order, nil
 }
 

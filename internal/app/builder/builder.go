@@ -18,12 +18,14 @@ import (
 	ccatalog "github.com/Dopesonic/order-service/internal/app/client/catalog"
 	cgrpc "github.com/Dopesonic/order-service/internal/app/client/catalog/grpc"
 	"github.com/Dopesonic/order-service/internal/app/config"
+	"github.com/Dopesonic/order-service/internal/app/constant"
 	rhandler "github.com/Dopesonic/order-service/internal/app/handler/http"
 	rhealth "github.com/Dopesonic/order-service/internal/app/handler/http/health"
 	horder "github.com/Dopesonic/order-service/internal/app/handler/http/order"
 	"github.com/Dopesonic/order-service/internal/app/monitor/metric"
 	"github.com/Dopesonic/order-service/internal/app/processor"
 	rprocessor "github.com/Dopesonic/order-service/internal/app/processor/http"
+	mmonitor "github.com/Dopesonic/order-service/internal/app/processor/monitor"
 	"github.com/Dopesonic/order-service/internal/app/repository"
 	rcpostgres "github.com/Dopesonic/order-service/internal/app/repository/conn/postgres"
 	porder "github.com/Dopesonic/order-service/internal/app/repository/order"
@@ -32,11 +34,12 @@ import (
 )
 
 type Builder struct {
-	cCtx *cli.Context
-	ctx  context.Context
-	wg   sync.WaitGroup
-	err  error
-	cfg  config.Config
+	cCtx            *cli.Context
+	ctx             context.Context
+	wg              sync.WaitGroup
+	err             error
+	cfg             config.Config
+	otelServiceName string
 
 	chErrors chan error
 
@@ -154,6 +157,7 @@ func (b *Builder) BuildHandlerOrder() {
 func (b *Builder) BuildProcHttp() {
 	b.exec(func(b *Builder) {
 		p := rprocessor.NewHTTP(
+			b.otelServiceName,
 			b.healthHandler,
 			b.orderHandler,
 			b.cfg.Processor.WebServer,
@@ -196,6 +200,24 @@ func (b *Builder) BuildClientGrpcCatalogV1() {
 		log.Info().
 			Str("address", b.cfg.Client.Catalog.GrpcAddress).
 			Msg("Catalog gRPC client initialized")
+	})
+}
+
+func (b *Builder) BuildMonitorOpenTelemetry() {
+	cfg := b.cfg.Monitor.OpenTelemetry
+	if !cfg.Enabled {
+		log.Warn().Msg("OpenTelemetry is disabled by config")
+		return
+	}
+
+	b.exec(func(b *Builder) {
+		proc, err := mmonitor.NewOpenTelemetryController(b.ctx, b.cfg.Monitor.Environment, cfg)
+		if err != nil {
+			b.err = fmt.Errorf("init OpenTelemetry: %w", err)
+			return
+		}
+		b.processors = append(b.processors, proc)
+		b.otelServiceName = constant.AppName
 	})
 }
 

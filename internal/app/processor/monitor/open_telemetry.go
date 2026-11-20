@@ -89,6 +89,7 @@ func NewOpenTelemetryController(
 	batchProcessor := sdktrace.NewBatchSpanProcessor(
 		exporter,
 		sdktrace.WithBatchTimeout(cfg.SendBatchTimeout),
+		sdktrace.WithExportTimeout(cfg.ExportTimeout),
 		sdktrace.WithMaxExportBatchSize(maxBatchSize),
 		sdktrace.WithMaxQueueSize(maxQueueSize),
 	)

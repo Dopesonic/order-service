@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -37,11 +38,14 @@ func NewClient(ctx context.Context, cfg section.RepositoryPostgres) (*Client, er
 	dsn := u.String()
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		DisableAutomaticPing: true,
-		Logger:               logger.Default.LogMode(logger.Silent),
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open postgres: %w", err)
+		return nil, fmt.Errorf("gorm.Open: %w", err)
+	}
+
+	if err := db.Use(otelgorm.NewPlugin(otelgorm.WithDBName(cfg.Name))); err != nil {
+		return nil, fmt.Errorf("otelgorm plugin: %w", err)
 	}
 
 	sqlDB, err := db.DB()

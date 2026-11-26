@@ -54,6 +54,7 @@ func NewHTTP(
 	router.NoRoute(handleNotFound)
 
 	vGenericRegHealthCheck(router, hHealth)
+	vGenericRegProf(router)
 
 	v1 := router.Group("/v1")
 	v1RegOrderHandler(v1, hOrder)

@@ -26,12 +26,16 @@ const (
 
 	createdAmountName = "created_amount_cents_total"
 	createdAmountHelp = "Total amount of successfully created orders in cents."
+
+	metricEventPublishFailedName = "event_publish_failed_total"
+	metricEventPublishFailedHelp = "Total number of failed Kafka event publish attempts."
 )
 
 type Order struct {
 	createTotal           *prometheus.CounterVec
 	createDurationSeconds *prometheus.HistogramVec
 	createdAmountTotal    prometheus.Counter
+	eventPublishFailed    prometheus.Counter
 }
 
 var _ monitor.OrderMetrics = (*Order)(nil)
@@ -71,10 +75,16 @@ func NewPrometheusOrder(registerer prometheus.Registerer) (*Order, error) {
 		return nil, fmt.Errorf("register %s: %w", createdAmountName, err)
 	}
 
+	eventPublishedFailed, err := counter(registerer, metricEventPublishFailedName, metricEventPublishFailedHelp)
+	if err != nil {
+		return nil, fmt.Errorf("register %s: %w", metricEventPublishFailedName, err)
+	}
+
 	return &Order{
 		createTotal:           total,
 		createDurationSeconds: duration,
 		createdAmountTotal:    amount,
+		eventPublishFailed:    eventPublishedFailed,
 	}, nil
 }
 
@@ -112,4 +122,8 @@ func (m *orderCreateMetric) Failed(_ error) {
 	m.parent.createDurationSeconds.
 		WithLabelValues(createResultError).
 		Observe(time.Since(m.started).Seconds())
+}
+
+func (m *orderCreateMetric) PublishFailed() {
+	m.parent.eventPublishFailed.Inc()
 }

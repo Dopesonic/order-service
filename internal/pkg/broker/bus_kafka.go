@@ -111,6 +111,7 @@ func (b *kafkaBus[T]) Subscribe(ctx context.Context, wg *sync.WaitGroup, handler
 	if err != nil {
 		return fmt.Errorf("broker: create consumer group %q: %w", b.consumerGroup, err)
 	}
+	b.consumer = consumer
 
 	h := &consumerGroupHandler[T]{
 		codec:   b.codec,

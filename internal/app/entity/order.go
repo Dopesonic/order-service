@@ -146,7 +146,7 @@ func (e EventOrderCreated) MarshalZerologObject(ev *zerolog.Event) {
 	ev.Str("order_guid", e.OrderGUID).
 		Str("currency", e.Currency).
 		Int64("total_price", e.TotalPrice).
-		Int("items", len(e.Items))
+		Int("items_count", len(e.Items))
 }
 
 ////////////////////////////////////////////////////////////////////////////////

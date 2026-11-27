@@ -240,6 +240,7 @@ func (b *Builder) BuildBrokerKafka() {
 		})
 		if err != nil {
 			b.err = fmt.Errorf("init broker kafka client: %w", err)
+			return
 		}
 
 		b.kafkaClient = client
